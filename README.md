@@ -11,10 +11,10 @@ Ensure that `docker` and `docker-compose` are installed.
 
 ### HF Binaries
 
-Download binaries for Hyperledger Fabric v1.4.6
+Download binaries for Hyperledger Fabric v2.2
 
 ```bash
-curl -sSL http://bit.ly/2ysbOFE | bash -s -- 1.4.6 -d -s
+curl -sSL http://bit.ly/2ysbOFE | bash -s -- 2.2 -d -s
 rm -f config/configtx.yaml config/core.yaml config/orderer.yaml
 ```
 
@@ -222,18 +222,124 @@ docker exec cli peer channel create -o orderer.example.com:7050 --tls --cafile /
 docker exec cli peer channel join -b channel1.block
 ```
 
-Install and instantiate chaincode
+Install and invoke chaincode, see scripts/deployCC.sh
 
 ```bash
-docker exec cli peer chaincode install -n chaincode1 -p github.com/chaincode1 -v 1
-docker exec cli peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -l "golang" -v 1 -c '{"Args":["init","a","81","b","11"]}' -P "OR('Org1MSP.member')"
-```
+#!/bin/bash
 
-Attempt to invoke and query chaincode
+source scripts/utils.sh
 
-```bash
-docker exec cli peer chaincode invoke -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -c '{"Args":["put", "z", "7"]}' --waitForEvent
-docker exec cli peer chaincode query -C channel1 -n chaincode1 -c '{"Args":["query","a"]}'
+CC_NAME=cc1
+CC_SRC_PATH=/opt/gopath/src/github.com/chaincode1/
+CC_RUNTIME_LANGUAGE=golang
+CC_VERSION=1
+CC_SEQUENCE=1
+
+ORDERER_CA=/var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+CHANNEL_NAME=channel1
+INIT_REQUIRED="--init-required"
+ORG=1
+
+verifyResult() {
+  if [ $1 -ne 0 ]; then
+      fatalln "$2"
+  fi
+}
+
+packageChaincode() {
+  set -x
+  peer lifecycle chaincode package ${CC_NAME}.tar.gz --path ${CC_SRC_PATH} --lang ${CC_RUNTIME_LANGUAGE} --label ${CC_NAME}_${CC_VERSION} >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+  verifyResult $res "Chaincode packaging has failed"
+  successln "Chaincode is packaged"
+}
+
+installChaincode() {
+  set -x
+  peer lifecycle chaincode install ${CC_NAME}.tar.gz >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+  verifyResult $res "Chaincode installation on peer0.org${ORG} has failed"
+  successln "Chaincode is installed on peer0.org${ORG}"
+}
+
+queryInstalled() {
+  set -x
+  peer lifecycle chaincode queryinstalled >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+  PACKAGE_ID=$(sed -n "/${CC_NAME}_${CC_VERSION}/{s/^Package ID: //; s/, Label:.*$//; p;}" log.txt)
+  verifyResult $res "Query installed on peer0.org${ORG} has failed"
+  successln "Query installed successful on peer0.org${ORG} on channel"
+}
+
+approveForMyOrg() {
+  set -x
+  peer lifecycle chaincode approveformyorg -o orderer.example.com:7050 --tls --cafile $ORDERER_CA --channelID $CHANNEL_NAME --name ${CC_NAME} --version ${CC_VERSION} --package-id ${PACKAGE_ID} --sequence ${CC_SEQUENCE} ${INIT_REQUIRED} >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+  verifyResult $res "Chaincode definition approved on peer0.org${ORG} on channel '$CHANNEL_NAME' failed"
+  successln "Chaincode definition approved on peer0.org${ORG} on channel '$CHANNEL_NAME'"
+}
+
+commitChaincodeDefinition() {
+  PEER_CONN_PARMS="--peerAddresses peer0.org1.example.com:7051 --tlsRootCertFiles /var/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
+  set -x
+  peer lifecycle chaincode commit -o orderer.example.com:7050 --tls --cafile $ORDERER_CA --channelID $CHANNEL_NAME --name ${CC_NAME} $PEER_CONN_PARMS --version ${CC_VERSION} --sequence ${CC_SEQUENCE} ${INIT_REQUIRED} >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+  verifyResult $res "Chaincode definition commit failed on peer0.org${ORG} on channel '$CHANNEL_NAME' failed"
+  successln "Chaincode definition committed on channel '$CHANNEL_NAME'"
+}
+
+queryCommitted() {
+  set -x
+  peer lifecycle chaincode querycommitted --channelID $CHANNEL_NAME --name ${CC_NAME} >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+}
+
+chaincodeInvokeInit() {
+  set -x
+  peer chaincode invoke -o orderer.example.com:7050 --tls --cafile $ORDERER_CA -C $CHANNEL_NAME -n ${CC_NAME} $PEER_CONN_PARMS --isInit -c '{"Args":["Init","a","100","b","100"]}' >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+}
+
+chaincodeQuery() {
+  set -x
+  peer chaincode query -C $CHANNEL_NAME -n ${CC_NAME} -c '{"Args":["query","a"]}' >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  cat log.txt
+}
+
+packageChaincode
+
+installChaincode
+
+queryInstalled
+
+approveForMyOrg
+
+commitChaincodeDefinition
+
+queryCommitted
+
+chaincodeInvokeInit
+
+echo "Sleeping for 10 seconds.."
+sleep 10
+
+chaincodeQuery
 ```
 
 If querying chaincode succeeds, we have successfully used the certificates to interact with the Hyperledger Fabric network
