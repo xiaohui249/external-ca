@@ -16,274 +16,120 @@ limitations under the License.
 
 package main
 
-//WARNING - this chaincode's ID is hard-coded in chaincode_example04 to illustrate one way of
-//calling chaincode from a chaincode. If this example is modified, chaincode_example04.go has
-//to be modified as well with the new ID of chaincode_example02.
-//chaincode_example05 show's how chaincode ID can be passed in as a parameter instead of
-//hard-coding.
-
 import (
-	"bytes"
-	"crypto/x509"
-	"encoding/asn1"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
-	"github.com/hyperledger/fabric/core/chaincode/shim"
-	pb "github.com/hyperledger/fabric/protos/peer"
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// SimpleChaincodeOne example simple Chaincode implementation
-type SimpleChaincodeOne struct {
+// ABstore Chaincode implementation
+type ABstore struct {
+	contractapi.Contract
 }
 
-func (t *SimpleChaincodeOne) Init(stub shim.ChaincodeStubInterface) pb.Response {
-	fmt.Println("ex02 Init")
-	_, args := stub.GetFunctionAndParameters()
-	var A, B string    // Entities
-	var Aval, Bval int // Asset holdings
+func (t *ABstore) Init(ctx contractapi.TransactionContextInterface, A string, Aval int, B string, Bval int) error {
+	fmt.Println("ABstore Init")
 	var err error
-
-	if len(args) != 4 {
-		return shim.Error("Incorrect number of arguments. Expecting 4")
-	}
-
 	// Initialize the chaincode
-	A = args[0]
-	Aval, err = strconv.Atoi(args[1])
-	if err != nil {
-		return shim.Error("Expecting integer value for asset holding")
-	}
-	B = args[2]
-	Bval, err = strconv.Atoi(args[3])
-	if err != nil {
-		return shim.Error("Expecting integer value for asset holding")
-	}
 	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
-
 	// Write the state to the ledger
-	err = stub.PutState(A, []byte(strconv.Itoa(Aval)))
+	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
 	if err != nil {
-		return shim.Error(err.Error())
+		return err
 	}
 
-	err = stub.PutState(B, []byte(strconv.Itoa(Bval)))
+	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
 	if err != nil {
-		return shim.Error(err.Error())
+		return err
 	}
 
-	return shim.Success(nil)
-}
-
-func (t *SimpleChaincodeOne) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
-	var caller string
-	var err error
-	caller, err = getUser(stub)
-
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-
-	fmt.Printf("Called by: %v\n", caller)
-
-	fmt.Println("ex02 Invoke")
-	function, args := stub.GetFunctionAndParameters()
-	if function == "invoke" {
-		// Make payment of X units from A to B
-		return t.invoke(stub, args)
-	} else if function == "put" {
-		// Deletes an entity from its state
-		return t.put(stub, args)
-	} else if function == "delete" {
-		// Deletes an entity from its state
-		return t.delete(stub, args)
-	} else if function == "query" {
-		// the old "Query" is now implemtned in invoke
-		return t.query(stub, args)
-	}
-
-	return shim.Error("Invalid invoke function name. Expecting \"invoke\" \"delete\" \"query\"")
+	return nil
 }
 
 // Transaction makes payment of X units from A to B
-func (t *SimpleChaincodeOne) put(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var A string // Entities
+func (t *ABstore) Invoke(ctx contractapi.TransactionContextInterface, A, B string, X int) error {
 	var err error
-
-	if len(args) != 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 2")
-	}
-
-	A = args[0]
-
-	// Write the state back to the ledger
-	err = stub.PutState(A, []byte(args[1]))
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-
-	return shim.Success(nil)
-}
-
-// Transaction makes payment of X units from A to B
-func (t *SimpleChaincodeOne) invoke(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var A, B string    // Entities
-	var Aval, Bval int // Asset holdings
-	var X int          // Transaction value
-	var err error
-
-	if len(args) != 3 {
-		return shim.Error("Incorrect number of arguments. Expecting 3")
-	}
-
-	A = args[0]
-	B = args[1]
-
+	var Aval int
+	var Bval int
 	// Get the state from the ledger
 	// TODO: will be nice to have a GetAllState call to ledger
-	Avalbytes, err := stub.GetState(A)
+	Avalbytes, err := ctx.GetStub().GetState(A)
 	if err != nil {
-		return shim.Error("Failed to get state")
+		return fmt.Errorf("Failed to get state")
 	}
 	if Avalbytes == nil {
-		return shim.Error("Entity not found")
+		return fmt.Errorf("Entity not found")
 	}
 	Aval, _ = strconv.Atoi(string(Avalbytes))
 
-	Bvalbytes, err := stub.GetState(B)
+	Bvalbytes, err := ctx.GetStub().GetState(B)
 	if err != nil {
-		return shim.Error("Failed to get state")
+		return fmt.Errorf("Failed to get state")
 	}
 	if Bvalbytes == nil {
-		return shim.Error("Entity not found")
+		return fmt.Errorf("Entity not found")
 	}
 	Bval, _ = strconv.Atoi(string(Bvalbytes))
 
 	// Perform the execution
-	X, err = strconv.Atoi(args[2])
-	if err != nil {
-		return shim.Error("Invalid transaction amount, expecting a integer value")
-	}
 	Aval = Aval - X
 	Bval = Bval + X
 	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
 
 	// Write the state back to the ledger
-	err = stub.PutState(A, []byte(strconv.Itoa(Aval)))
+	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
 	if err != nil {
-		return shim.Error(err.Error())
+		return err
 	}
 
-	err = stub.PutState(B, []byte(strconv.Itoa(Bval)))
+	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
 	if err != nil {
-		return shim.Error(err.Error())
+		return err
 	}
 
-	return shim.Success(nil)
+	return nil
 }
 
-// Deletes an entity from state
-func (t *SimpleChaincodeOne) delete(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
-	}
-
-	A := args[0]
+// Delete  an entity from state
+func (t *ABstore) Delete(ctx contractapi.TransactionContextInterface, A string) error {
 
 	// Delete the key from the state in ledger
-	err := stub.DelState(A)
+	err := ctx.GetStub().DelState(A)
 	if err != nil {
-		return shim.Error("Failed to delete state")
+		return fmt.Errorf("Failed to delete state")
 	}
 
-	return shim.Success(nil)
+	return nil
 }
 
-// query callback representing the query of a chaincode
-func (t *SimpleChaincodeOne) query(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var A string // Entities
+// Query callback representing the query of a chaincode
+func (t *ABstore) Query(ctx contractapi.TransactionContextInterface, A string) (string, error) {
 	var err error
-
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting name of the person to query")
-	}
-
-	A = args[0]
-
 	// Get the state from the ledger
-	Avalbytes, err := stub.GetState(A)
+	Avalbytes, err := ctx.GetStub().GetState(A)
 	if err != nil {
 		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return shim.Error(jsonResp)
+		return "", errors.New(jsonResp)
 	}
 
 	if Avalbytes == nil {
 		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return shim.Error(jsonResp)
+		return "", errors.New(jsonResp)
 	}
 
 	jsonResp := "{\"Name\":\"" + A + "\",\"Amount\":\"" + string(Avalbytes) + "\"}"
 	fmt.Printf("Query Response:%s\n", jsonResp)
-	return shim.Success(Avalbytes)
-}
-
-func getUser(stub shim.ChaincodeStubInterface) (string, error) {
-	creator, err1 := stub.GetCreator()
-	if err1 != nil {
-		return "", fmt.Errorf("Could not get creator, err %s", err1)
-	}
-
-	start := bytes.Index(creator, []byte("-----BEGIN CERTIFICATE-----"))
-	if start == -1 {
-		return "", errors.New("No Certificate found")
-	}
-
-	block, _ := pem.Decode(creator[start:])
-	if block == nil {
-		return "", errors.New("cannot decode pem block from creator cert")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return "", err
-	}
-
-	for _, ext := range cert.Extensions {
-		if isAttrOID(ext.Id) {
-			fmt.Println("attribute: " + BytesToString(ext.Value))
-		}
-	}
-
-	fullCommonName := strings.Split(cert.Subject.CommonName, "-")
-	user := fullCommonName[0]
-	return string(user), err
-}
-
-func BytesToString(data []byte) string {
-	return string(data[:])
-}
-
-// Is the object ID equal to the attribute info object ID?
-func isAttrOID(oid asn1.ObjectIdentifier) bool {
-
-	AttrOID := asn1.ObjectIdentifier{1, 2, 3, 4, 5, 6, 7, 8, 1}
-	if len(oid) != len(AttrOID) {
-		return false
-	}
-	for idx, val := range oid {
-		if val != AttrOID[idx] {
-			return false
-		}
-	}
-	return true
+	return string(Avalbytes), nil
 }
 
 func main() {
-	err := shim.Start(new(SimpleChaincodeOne))
+	cc, err := contractapi.NewChaincode(new(ABstore))
 	if err != nil {
-		fmt.Printf("Error starting Simple chaincode: %s", err)
+		panic(err.Error())
+	}
+	if err := cc.Start(); err != nil {
+		fmt.Printf("Error starting ABstore chaincode: %s", err)
 	}
 }

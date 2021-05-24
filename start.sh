@@ -110,15 +110,15 @@ docker exec cli peer channel create -o orderer.example.com:7050 --tls --cafile /
 echo "Joining Peer to channel1.."
 docker exec cli peer channel join -b channel1.block
 
-echo "Installing Chaincode.."
-docker exec cli peer chaincode install -n chaincode1 -p github.com/chaincode1 -v 1
+# echo "Installing Chaincode.."
+# docker exec cli peer chaincode install -n chaincode1 -p github.com/chaincode1 -v 1
 
-echo "Instantiating Chaincode.."
-docker exec cli peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -l "golang" -v 1 -c '{"Args":["init","a","81","b","11"]}' -P "OR('Org1MSP.member')"
-sleep 5
+# echo "Instantiating Chaincode.."
+# docker exec cli peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -l "golang" -v 1 -c '{"Args":["init","a","81","b","11"]}' -P "OR('Org1MSP.member')"
+# sleep 5
 
-echo "Invoking Chaincode.."
-docker exec cli peer chaincode invoke -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -c '{"Args":["put", "z", "7"]}' --waitForEvent
+# echo "Invoking Chaincode.."
+# docker exec cli peer chaincode invoke -o orderer.example.com:7050 --tls --cafile /var/crypto/ordererOrganizations/example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C channel1 -n chaincode1 -c '{"Args":["put", "z", "7"]}' --waitForEvent
 
-echo "Querying Chaincode.."
-docker exec cli peer chaincode query -C channel1 -n chaincode1 -c '{"Args":["query","a"]}'
+# echo "Querying Chaincode.."
+# docker exec cli peer chaincode query -C channel1 -n chaincode1 -c '{"Args":["query","a"]}'
