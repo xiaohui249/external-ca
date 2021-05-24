@@ -127,5 +127,6 @@ services:
         - ./chaincode/:/opt/gopath/src/github.com/
         - ./crypto-config:/var/crypto
         - ./config:/config
+        - ./scripts:/opt/gopath/src/github.com/hyperledger/fabric/peer/scripts/
     networks:
         - basic

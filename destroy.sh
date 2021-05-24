@@ -5,6 +5,7 @@ echo "Destroying all components.."
 docker-compose down
 
 docker rm -f $(docker ps -a | grep chaincode1 | awk '{print $1}')
+docker rmi -f $(docker images | awk '($1 ~ /dev-peer.*/) {print $3}')
 
 rm -rf config/* crypto-config identity-rca tls-rca newica
 rm -rf ca-config/msp ca-config/*.db ca-config/IssuerPublicKey ca-config/IssuerRevocationPublicKey
