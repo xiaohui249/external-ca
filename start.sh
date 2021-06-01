@@ -36,14 +36,14 @@ openssl ecparam -name prime256v1 -genkey -noout -out $ORG_DIR/ca/ica.identity.or
 openssl req -new -sha256 -key $ORG_DIR/ca/ica.identity.org1.example.com.key -out $ORG_DIR/ca/ica.identity.org1.example.com.csr -subj "/C=SG/ST=Singapore/L=Singapore/O=org1.example.com/OU=/CN=ica.identity.org1.example.com"
 openssl ca -batch -config openssl_root-identity.cnf -extensions v3_intermediate_ca -days 1825 -notext -md sha256 -in $ORG_DIR/ca/ica.identity.org1.example.com.csr -out $ORG_DIR/ca/ica.identity.org1.example.com.cert
 cat $ORG_DIR/ca/ica.identity.org1.example.com.cert $PWD/identity-rca/certs/rca.identity.org1.example.com.cert > $ORG_DIR/ca/chain.identity.org1.example.com.cert
-rm -f $ORG_DIR/ca/ica.identity.org1.example.com.csr $ORG_DIR/ca/chain.identity.org1.example.com.cert
+rm -f $ORG_DIR/ca/ica.identity.org1.example.com.csr
 
 echo "Creating and signing TLS Intermediate CA Cert.."
 openssl ecparam -name prime256v1 -genkey -noout -out $ORG_DIR/tlsca/ica.tls.org1.example.com.key
 openssl req -new -sha256 -key $ORG_DIR/tlsca/ica.tls.org1.example.com.key -out $ORG_DIR/tlsca/ica.tls.org1.example.com.csr -subj "/C=SG/ST=Singapore/L=Singapore/O=org1.example.com/OU=/CN=ica.tls.org1.example.com"
 openssl ca -batch -config openssl_root-tls.cnf -extensions v3_intermediate_ca -days 1825 -notext -md sha256 -in $ORG_DIR/tlsca/ica.tls.org1.example.com.csr -out $ORG_DIR/tlsca/ica.tls.org1.example.com.cert
 cat $ORG_DIR/tlsca/ica.tls.org1.example.com.cert $PWD/tls-rca/certs/rca.tls.org1.example.com.cert > $ORG_DIR/tlsca/chain.tls.org1.example.com.cert
-rm -f $ORG_DIR/tlsca/ica.tls.org1.example.com.csr $ORG_DIR/tlsca/chain.tls.org1.example.com.cert
+rm -f $ORG_DIR/tlsca/ica.tls.org1.example.com.csr
 
 echo "Starting Intermediate CA.."
 docker-compose up -d ica.org1.example.com
@@ -53,6 +53,7 @@ sleep 60
 echo "Registering and Enrolling Peer and User Identities.."
 export FABRIC_CA_CLIENT_HOME=$IDENTITY_REGISTRAR_DIR
 fabric-ca-client enroll --caname ca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m admin -u http://admin:adminpw@localhost:7054
+rm -f $IDENTITY_REGISTRAR_DIR/msp/IssuerPublicKey $IDENTITY_REGISTRAR_DIR/msp/IssuerRevocationPublicKey
 
 echo "Sleeping for 30 seconds.."
 sleep 30
@@ -62,17 +63,20 @@ fabric-ca-client register --caname ca --id.name peer0.org1.example.com --id.secr
 
 export FABRIC_CA_CLIENT_HOME=$ADMIN_DIR
 fabric-ca-client enroll --caname ca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m Admin@org1.example.com -u http://Admin@org1.example.com:mysecret@localhost:7054
-# cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $ADMIN_DIR/msp/chain.cert
+cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $ADMIN_DIR/msp/chain.cert
 cp $PWD/nodeou.yaml $ADMIN_DIR/msp/config.yaml
+rm -f $ADMIN_DIR/msp/IssuerPublicKey $ADMIN_DIR/msp/IssuerRevocationPublicKey
 
 export FABRIC_CA_CLIENT_HOME=$PEER_DIR
 fabric-ca-client enroll --caname ca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m peer0.org1.example.com -u http://peer0.org1.example.com:mysecret@localhost:7054
-# cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $PEER_DIR/msp/chain.cert
+cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $PEER_DIR/msp/chain.cert
 cp $PWD/nodeou.yaml $PEER_DIR/msp/config.yaml
+rm -f $PEER_DIR/msp/IssuerPublicKey $PEER_DIR/msp/IssuerRevocationPublicKey
 
 echo "Registering and Enrolling Peer TLS Certificate-Key pair.."
 export FABRIC_CA_CLIENT_HOME=$TLS_REGISTRAR_DIR
 fabric-ca-client enroll --caname tlsca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m admin -u http://admin:adminpw@localhost:7054
+rm -f $TLS_REGISTRAR_DIR/msp/IssuerPublicKey $TLS_REGISTRAR_DIR/msp/IssuerRevocationPublicKey
 
 echo "Sleeping for 30 seconds.."
 sleep 30
@@ -93,7 +97,7 @@ cp $PEER_DIR/msp/intermediatecerts/*.pem $ORG_DIR/msp/intermediatecerts/
 cp $ORG_DIR/tlsca/ica.tls.org1.example.com.cert $ORG_DIR/msp/tlscacerts/
 cp $ORG_DIR/tlsca/ica.tls.org1.example.com.cert $ORG_DIR/msp/tlsintermediatecerts/
 
-# cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $ORG_DIR/msp/chain.cert
+cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $ORG_DIR/msp/chain.cert
 cp $PWD/nodeou.yaml $ORG_DIR/msp/config.yaml
 
 echo "Generating Orderer Genesis Block and Channel Transaction.."
