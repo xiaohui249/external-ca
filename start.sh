@@ -53,7 +53,7 @@ export FABRIC_CA_CLIENT_HOME=$IDENTITY_REGISTRAR_DIR
 fabric-ca-client enroll --caname ca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m admin -u http://admin:adminpw@localhost:7054
 
 echo "Sleeping for 30 seconds.."
-sleep 35
+sleep 30
 
 fabric-ca-client register --caname ca --id.name Admin@org1.example.com --id.secret mysecret --id.type admin --id.affiliation org1 -u http://localhost:7054
 fabric-ca-client register --caname ca --id.name peer0.org1.example.com --id.secret mysecret --id.type peer --id.affiliation org1 -u http://localhost:7054
@@ -73,7 +73,7 @@ export FABRIC_CA_CLIENT_HOME=$TLS_REGISTRAR_DIR
 fabric-ca-client enroll --caname tlsca --csr.names C=SG,ST=Singapore,L=Singapore,O=org1.example.com -m admin -u http://admin:adminpw@localhost:7054
 
 echo "Sleeping for 30 seconds.."
-sleep 35
+sleep 30
 
 fabric-ca-client register --caname tlsca --id.name peer0.org1.example.com --id.secret mysecret --id.type peer --id.affiliation org1 -u http://localhost:7054
 export FABRIC_CA_CLIENT_HOME=$PEER_DIR/tls
@@ -87,7 +87,8 @@ echo "Preparing Org1 MSP.."
 mkdir -p $ORG_DIR/msp/admincerts $ORG_DIR/msp/intermediatecerts $ORG_DIR/msp/cacerts $ORG_DIR/msp/tlscacerts $ORG_DIR/msp/tlsintermediatecerts
 cp $PEER_DIR/msp/cacerts/*.pem $ORG_DIR/msp/cacerts/
 cp $PEER_DIR/msp/intermediatecerts/*.pem $ORG_DIR/msp/intermediatecerts/
-cp $PWD/tls-rca/certs/rca.tls.org1.example.com.cert $ORG_DIR/msp/tlscacerts/
+#cp $PWD/tls-rca/certs/rca.tls.org1.example.com.cert $ORG_DIR/msp/tlscacerts/
+cp $ORG_DIR/tlsca/ica.tls.org1.example.com.cert $ORG_DIR/msp/tlscacerts/
 cp $ORG_DIR/tlsca/ica.tls.org1.example.com.cert $ORG_DIR/msp/tlsintermediatecerts/
 
 cp $ORG_DIR/ca/chain.identity.org1.example.com.cert $ORG_DIR/msp/chain.cert
